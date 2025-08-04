@@ -151,116 +151,204 @@ const FiniteStateMachine = () => {
   // Componente de diagrama de estados
   const StateDiagram = () => {
     const canvasRef = useRef(null);
-    
+    //señal inicial
     useEffect(() => {
-      if (!canvasRef.current) return;
-      
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      const width = canvas.width;
-      const height = canvas.height;
-      
-      // Limpiar canvas
-      ctx.clearRect(0, 0, width, height);
-      
-      // Posiciones de los estados (ajustadas para el ejemplo)
-      const positions = {
-        's0': { x: 150, y: 200 },
-        's1': { x: 300, y: 100 },
-        's2': { x: 450, y: 200 },
-        's3': { x: 300, y: 300 },
-        's4': { x: 500, y: 100 }
+  if (!canvasRef.current) return;
+  
+  const canvas = canvasRef.current;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  
+  // Limpiar canvas
+  ctx.clearRect(0, 0, width, height);
+  
+  // Posiciones de los estados (dinámicas)
+  const positions = {};
+  const numStates = currentMachine.states.length;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = Math.min(width, height) * 0.3;
+  
+  // Generar posiciones en círculo para estados dinámicos
+  currentMachine.states.forEach((state, index) => {
+    if (numStates === 1) {
+      positions[state] = { x: centerX, y: centerY };
+    } else {
+      const angle = (2 * Math.PI * index) / numStates - Math.PI / 2;
+      positions[state] = {
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle)
       };
+    }
+  });
+  
+  // Agrupar transiciones por pares de estados para multigrafo
+  const transitions = {};
+  currentMachine.states.forEach(state => {
+    currentMachine.inputAlphabet.forEach(input => {
+      const nextState = currentMachine.transitionFunction[state][input];
+      const output = currentMachine.outputFunction[state][input];
       
-      // Dibujar transiciones
-      const m = currentMachine;
-      m.states.forEach(state => {
-        if (!positions[state]) return;
-        
-        m.inputAlphabet.forEach(input => {
-          const nextState = m.transitionFunction[state][input];
-          const output = m.outputFunction[state][input];
-          
-          if (positions[nextState]) {
-            const start = positions[state];
-            const end = positions[nextState];
-            
-            if (state === nextState) {
-              // Auto-loop
-              ctx.beginPath();
-              ctx.arc(start.x, start.y - 40, 20, 0, 2 * Math.PI);
-              ctx.strokeStyle = '#666';
-              ctx.stroke();
-              
-              // Etiqueta
-              ctx.fillStyle = '#333';
-              ctx.font = '12px Arial';
-              ctx.fillText(`${input},${output}`, start.x - 15, start.y - 65);
-            } else {
-              // Flecha entre estados
-              ctx.beginPath();
-              ctx.moveTo(start.x, start.y);
-              ctx.lineTo(end.x, end.y);
-              ctx.strokeStyle = '#666';
-              ctx.stroke();
-              
-              // Punta de flecha
-              const angle = Math.atan2(end.y - start.y, end.x - start.x);
-              ctx.beginPath();
-              ctx.moveTo(end.x - 15 * Math.cos(angle - Math.PI/6), end.y - 15 * Math.sin(angle - Math.PI/6));
-              ctx.lineTo(end.x, end.y);
-              ctx.lineTo(end.x - 15 * Math.cos(angle + Math.PI/6), end.y - 15 * Math.sin(angle + Math.PI/6));
-              ctx.stroke();
-              
-              // Etiqueta
-              const midX = (start.x + end.x) / 2;
-              const midY = (start.y + end.y) / 2;
-              ctx.fillStyle = '#333';
-              ctx.font = '12px Arial';
-              ctx.fillText(`${input},${output}`, midX - 10, midY - 5);
-            }
-          }
-        });
-      });
+      const key = `${state}-${nextState}`;
+      if (!transitions[key]) {
+        transitions[key] = [];
+      }
+      transitions[key].push(`${input},${output}`);
+    });
+  });
+  
+  // Dibujar transiciones (aristas múltiples)
+  Object.keys(transitions).forEach(key => {
+    const [fromState, toState] = key.split('-');
+    const labels = transitions[key];
+    
+    if (!positions[fromState] || !positions[toState]) return;
+    
+    const start = positions[fromState];
+    const end = positions[toState];
+    
+    if (fromState === toState) {
+      // Auto-loop
+      const loopRadius = 25;
+      const loopX = start.x;
+      const loopY = start.y - 50;
       
-      // Dibujar estados
-      m.states.forEach(state => {
-        if (!positions[state]) return;
+      ctx.beginPath();
+      ctx.arc(loopX, loopY, loopRadius, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#4b5563';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Flecha para auto-loop
+      ctx.beginPath();
+      ctx.moveTo(loopX + loopRadius - 5, loopY - 5);
+      ctx.lineTo(loopX + loopRadius, loopY);
+      ctx.lineTo(loopX + loopRadius - 5, loopY + 5);
+      ctx.strokeStyle = '#4b5563';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Etiquetas
+      ctx.fillStyle = '#1f2937';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels.join(' | '), loopX, loopY - loopRadius - 10);
+    } else {
+      // Múltiples aristas curvas entre estados diferentes
+      const numLabels = labels.length;
+      const baseAngle = Math.atan2(end.y - start.y, end.x - start.x);
+      
+      labels.forEach((label, index) => {
+        // Calcular curvatura para múltiples aristas
+        const curvature = numLabels > 1 ? (index - (numLabels - 1) / 2) * 0.3 : 0;
         
-        const pos = positions[state];
+        // Punto de control para curva
+        const midX = (start.x + end.x) / 2;
+        const midY = (start.y + end.y) / 2;
+        const controlX = midX + curvature * 60 * Math.cos(baseAngle + Math.PI / 2);
+        const controlY = midY + curvature * 60 * Math.sin(baseAngle + Math.PI / 2);
         
-        // Círculo del estado
+        // Dibujar curva
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 25, 0, 2 * Math.PI);
-        ctx.fillStyle = currentState === state ? '#3B82F6' : '#E5E7EB';
-        ctx.fill();
-        ctx.strokeStyle = '#374151';
+        ctx.moveTo(start.x, start.y);
+        ctx.quadraticCurveTo(controlX, controlY, end.x, end.y);
+        ctx.strokeStyle = '#4b5563';
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Texto del estado
-        ctx.fillStyle = currentState === state ? '#FFFFFF' : '#374151';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(state, pos.x, pos.y + 5);
+        // Calcular punto y ángulo para la flecha
+        const t = 0.85; // Posición de la flecha en la curva
+        const arrowX = (1-t)*(1-t)*start.x + 2*(1-t)*t*controlX + t*t*end.x;
+        const arrowY = (1-t)*(1-t)*start.y + 2*(1-t)*t*controlY + t*t*end.y;
         
-        // Marcar estado inicial
-        if (state === m.initialState) {
-          ctx.beginPath();
-          ctx.moveTo(pos.x - 50, pos.y);
-          ctx.lineTo(pos.x - 25, pos.y);
-          ctx.strokeStyle = '#059669';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          ctx.fillStyle = '#059669';
-          ctx.font = '12px Arial';
-          ctx.textAlign = 'left';
-          ctx.fillText('Inicio', pos.x - 80, pos.y + 5);
-        }
+        // Calcular tangente para orientar la flecha
+        const tangentX = 2*(1-t)*(controlX - start.x) + 2*t*(end.x - controlX);
+        const tangentY = 2*(1-t)*(controlY - start.y) + 2*t*(end.y - controlY);
+        const arrowAngle = Math.atan2(tangentY, tangentX);
+        
+        // Dibujar flecha
+        const arrowSize = 12;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(
+          arrowX - arrowSize * Math.cos(arrowAngle - Math.PI/6),
+          arrowY - arrowSize * Math.sin(arrowAngle - Math.PI/6)
+        );
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(
+          arrowX - arrowSize * Math.cos(arrowAngle + Math.PI/6),
+          arrowY - arrowSize * Math.sin(arrowAngle + Math.PI/6)
+        );
+        ctx.strokeStyle = '#4b5563';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Etiqueta en el punto medio de la curva
+        const labelT = 0.5;
+        const labelX = (1-labelT)*(1-labelT)*start.x + 2*(1-labelT)*labelT*controlX + labelT*labelT*end.x;
+        const labelY = (1-labelT)*(1-labelT)*start.y + 2*(1-labelT)*labelT*controlY + labelT*labelT*end.y;
+        
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillRect(labelX - 15, labelY - 8, 30, 16); // Fondo blanco
+        ctx.fillStyle = 'white';
+        ctx.fillRect(labelX - 14, labelY - 7, 28, 14);
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(label, labelX, labelY + 3);
       });
-      
-    }, [currentMachine, currentState]);
+    }
+  });
+  
+  // Dibujar estados (círculos)
+  currentMachine.states.forEach(state => {
+    if (!positions[state]) return;
     
+    const pos = positions[state];
+    
+    // Círculo del estado
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 25, 0, 2 * Math.PI);
+    ctx.fillStyle = currentState === state ? '#3b82f6' : '#e5e7eb';
+    ctx.fill();
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Texto del estado
+    ctx.fillStyle = currentState === state ? '#ffffff' : '#374151';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(state, pos.x, pos.y + 5);
+    
+    // Marcar estado inicial
+    if (state === currentMachine.initialState) {
+      ctx.beginPath();
+      ctx.moveTo(pos.x - 50, pos.y);
+      ctx.lineTo(pos.x - 25, pos.y);
+      ctx.strokeStyle = '#059669';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Flecha de inicio
+      ctx.beginPath();
+      ctx.moveTo(pos.x - 30, pos.y - 5);
+      ctx.lineTo(pos.x - 25, pos.y);
+      ctx.lineTo(pos.x - 30, pos.y + 5);
+      ctx.strokeStyle = '#059669';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      ctx.fillStyle = '#059669';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('Inicio', pos.x - 85, pos.y + 5);
+    }
+  });
+  
+}, [currentMachine, currentState]);
+    // señal final
     return (
       <div style={styles.card}>
         <h3 style={styles.cardTitle}>Diagrama de Estados</h3>
@@ -373,6 +461,35 @@ const FiniteStateMachine = () => {
               style={styles.input}
               placeholder="0, 1"
             />
+            <div>
+  <label style={styles.label}>Alfabeto de Salida</label>
+  <input
+    type="text"
+    value={customMachine.outputAlphabet.join(', ')}
+    onChange={(e) => {
+      const newOutputAlphabet = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+      setCustomMachine(prev => {
+        // Actualizar funciones de salida para el nuevo alfabeto
+        const newOutputFunction = {};
+        
+        prev.states.forEach(state => {
+          newOutputFunction[state] = {};
+          prev.inputAlphabet.forEach(input => {
+            newOutputFunction[state][input] = newOutputAlphabet[0] || '0';
+          });
+        });
+        
+        return {
+          ...prev,
+          outputAlphabet: newOutputAlphabet,
+          outputFunction: newOutputFunction
+        };
+      });
+    }}
+    style={styles.input}
+    placeholder="0, 1, a, b"
+  />
+</div>
           </div>
         </div>
 
@@ -483,6 +600,7 @@ const FiniteStateMachine = () => {
                 {currentMachine.initialState}
               </div>
             </div>
+            
             <div style={styles.definitionItem}>
               <strong>Estado Actual:</strong>
               <div style={styles.definitionValueCurrent}>
@@ -692,11 +810,11 @@ const styles = {
     marginBottom: '16px'
   },
   editorGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    gap: '16px',
-    marginBottom: '16px'
-  },
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',  // Cambiar de 300px a 250px
+  gap: '16px',
+  marginBottom: '16px'
+},
   label: {
     display: 'block',
     fontSize: '14px',
