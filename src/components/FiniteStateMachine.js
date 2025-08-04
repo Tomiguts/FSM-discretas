@@ -312,10 +312,30 @@ const FiniteStateMachine = () => {
             <input
               type="text"
               value={customMachine.states.join(', ')}
-              onChange={(e) => setCustomMachine(prev => ({
-                ...prev,
-                states: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-              }))}
+              onChange={(e) => {
+  const newStates = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+  setCustomMachine(prev => {
+    // Crear nuevas funciones de transición y salida para los nuevos estados
+    const newTransitionFunction = {};
+    const newOutputFunction = {};
+    
+    newStates.forEach(state => {
+      newTransitionFunction[state] = {};
+      newOutputFunction[state] = {};
+      prev.inputAlphabet.forEach(input => {
+        newTransitionFunction[state][input] = newStates[0] || state;
+        newOutputFunction[state][input] = prev.outputAlphabet[0] || '0';
+      });
+    });
+    
+    return {
+      ...prev,
+      states: newStates,
+      transitionFunction: newTransitionFunction,
+      outputFunction: newOutputFunction
+    };
+  });
+}}
               style={styles.input}
               placeholder="s0, s1, s2"
             />
@@ -326,10 +346,30 @@ const FiniteStateMachine = () => {
             <input
               type="text"
               value={customMachine.inputAlphabet.join(', ')}
-              onChange={(e) => setCustomMachine(prev => ({
-                ...prev,
-                inputAlphabet: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-              }))}
+              onChange={(e) => {
+  const newInputAlphabet = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+  setCustomMachine(prev => {
+    // Actualizar funciones para el nuevo alfabeto
+    const newTransitionFunction = {};
+    const newOutputFunction = {};
+    
+    prev.states.forEach(state => {
+      newTransitionFunction[state] = {};
+      newOutputFunction[state] = {};
+      newInputAlphabet.forEach(input => {
+        newTransitionFunction[state][input] = prev.states[0] || state;
+        newOutputFunction[state][input] = prev.outputAlphabet[0] || '0';
+      });
+    });
+    
+    return {
+      ...prev,
+      inputAlphabet: newInputAlphabet,
+      transitionFunction: newTransitionFunction,
+      outputFunction: newOutputFunction
+    };
+  });
+}}
               style={styles.input}
               placeholder="0, 1"
             />
