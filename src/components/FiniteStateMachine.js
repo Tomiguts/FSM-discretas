@@ -184,24 +184,31 @@ const FiniteStateMachine = () => {
   });
   
   // Agrupar transiciones por pares de estados para multigrafo
-  const transitions = {};
-  currentMachine.states.forEach(state => {
-    currentMachine.inputAlphabet.forEach(input => {
-      const nextState = currentMachine.transitionFunction[state][input];
-      const output = currentMachine.outputFunction[state][input];
-      
-      const key = `${state}-${nextState}`;
-      if (!transitions[key]) {
-        transitions[key] = [];
-      }
-      transitions[key].push(`${input},${output}`);
-    });
+const transitions = {};
+currentMachine.states.forEach(state => {
+  currentMachine.inputAlphabet.forEach(input => {
+    const nextState = currentMachine.transitionFunction[state][input];
+    const output = currentMachine.outputFunction[state][input];
+    
+    // Usar clave direccional (de -> hacia)
+    const key = `${state}→${nextState}`;
+    if (!transitions[key]) {
+      transitions[key] = {
+        from: state,
+        to: nextState,
+        labels: []
+      };
+    }
+    transitions[key].labels.push(`${input},${output}`);
   });
+});
   
   // Dibujar transiciones (aristas múltiples)
   Object.keys(transitions).forEach(key => {
-    const [fromState, toState] = key.split('-');
-    const labels = transitions[key];
+  const transition = transitions[key];
+  const fromState = transition.from;
+  const toState = transition.to;
+  const labels = transition.labels;
     
     if (!positions[fromState] || !positions[toState]) return;
     
@@ -235,70 +242,75 @@ const FiniteStateMachine = () => {
       ctx.textAlign = 'center';
       ctx.fillText(labels.join(' | '), loopX, loopY - loopRadius - 10);
     } else {
-      // Múltiples aristas curvas entre estados diferentes
-      const numLabels = labels.length;
-      const baseAngle = Math.atan2(end.y - start.y, end.x - start.x);
-      
-      labels.forEach((label, index) => {
-        // Calcular curvatura para múltiples aristas
-        const curvature = numLabels > 1 ? (index - (numLabels - 1) / 2) * 0.3 : 0;
-        
-        // Punto de control para curva
-        const midX = (start.x + end.x) / 2;
-        const midY = (start.y + end.y) / 2;
-        const controlX = midX + curvature * 60 * Math.cos(baseAngle + Math.PI / 2);
-        const controlY = midY + curvature * 60 * Math.sin(baseAngle + Math.PI / 2);
-        
-        // Dibujar curva
-        ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        ctx.quadraticCurveTo(controlX, controlY, end.x, end.y);
-        ctx.strokeStyle = '#4b5563';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Calcular punto y ángulo para la flecha
-        const t = 0.85; // Posición de la flecha en la curva
-        const arrowX = (1-t)*(1-t)*start.x + 2*(1-t)*t*controlX + t*t*end.x;
-        const arrowY = (1-t)*(1-t)*start.y + 2*(1-t)*t*controlY + t*t*end.y;
-        
-        // Calcular tangente para orientar la flecha
-        const tangentX = 2*(1-t)*(controlX - start.x) + 2*t*(end.x - controlX);
-        const tangentY = 2*(1-t)*(controlY - start.y) + 2*t*(end.y - controlY);
-        const arrowAngle = Math.atan2(tangentY, tangentX);
-        
-        // Dibujar flecha
-        const arrowSize = 12;
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(
-          arrowX - arrowSize * Math.cos(arrowAngle - Math.PI/6),
-          arrowY - arrowSize * Math.sin(arrowAngle - Math.PI/6)
-        );
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(
-          arrowX - arrowSize * Math.cos(arrowAngle + Math.PI/6),
-          arrowY - arrowSize * Math.sin(arrowAngle + Math.PI/6)
-        );
-        ctx.strokeStyle = '#4b5563';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Etiqueta en el punto medio de la curva
-        const labelT = 0.5;
-        const labelX = (1-labelT)*(1-labelT)*start.x + 2*(1-labelT)*labelT*controlX + labelT*labelT*end.x;
-        const labelY = (1-labelT)*(1-labelT)*start.y + 2*(1-labelT)*labelT*controlY + labelT*labelT*end.y;
-        
-        ctx.fillStyle = '#1f2937';
-        ctx.font = 'bold 11px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillRect(labelX - 15, labelY - 8, 30, 16); // Fondo blanco
-        ctx.fillStyle = 'white';
-        ctx.fillRect(labelX - 14, labelY - 7, 28, 14);
-        ctx.fillStyle = '#1f2937';
-        ctx.fillText(label, labelX, labelY + 3);
-      });
-    }
+  // Múltiples aristas curvas entre estados diferentes
+  const numLabels = labels.length;
+  const baseAngle = Math.atan2(end.y - start.y, end.x - start.x);
+  
+  // Verificar si hay arista de vuelta para ajustar curvatura
+  const reverseKey = `${toState}→${fromState}`;
+  const hasReverse = transitions[reverseKey];
+  const baseCurvature = hasReverse ? 0.4 : 0; // Más curvatura si hay arista inversa
+  
+  labels.forEach((label, index) => {
+    // Calcular curvatura para múltiples aristas
+    const curvature = baseCurvature + (numLabels > 1 ? (index - (numLabels - 1) / 2) * 0.2 : 0);
+    
+    // Punto de control para curva
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const controlX = midX + curvature * 80 * Math.cos(baseAngle + Math.PI / 2);
+    const controlY = midY + curvature * 80 * Math.sin(baseAngle + Math.PI / 2);
+    
+    // Dibujar curva
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(controlX, controlY, end.x, end.y);
+    ctx.strokeStyle = '#4b5563';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Calcular punto y ángulo para la flecha
+    const t = 0.85; // Posición de la flecha en la curva
+    const arrowX = (1-t)*(1-t)*start.x + 2*(1-t)*t*controlX + t*t*end.x;
+    const arrowY = (1-t)*(1-t)*start.y + 2*(1-t)*t*controlY + t*t*end.y;
+    
+    // Calcular tangente para orientar la flecha
+    const tangentX = 2*(1-t)*(controlX - start.x) + 2*t*(end.x - controlX);
+    const tangentY = 2*(1-t)*(controlY - start.y) + 2*t*(end.y - controlY);
+    const arrowAngle = Math.atan2(tangentY, tangentX);
+    
+    // Dibujar flecha
+    const arrowSize = 12;
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(
+      arrowX - arrowSize * Math.cos(arrowAngle - Math.PI/6),
+      arrowY - arrowSize * Math.sin(arrowAngle - Math.PI/6)
+    );
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(
+      arrowX - arrowSize * Math.cos(arrowAngle + Math.PI/6),
+      arrowY - arrowSize * Math.sin(arrowAngle + Math.PI/6)
+    );
+    ctx.strokeStyle = '#4b5563';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Etiqueta en el punto medio de la curva
+    const labelT = 0.5;
+    const labelX = (1-labelT)*(1-labelT)*start.x + 2*(1-labelT)*labelT*controlX + labelT*labelT*end.x;
+    const labelY = (1-labelT)*(1-labelT)*start.y + 2*(1-labelT)*labelT*controlY + labelT*labelT*end.y;
+    
+    ctx.fillStyle = 'white';
+    ctx.fillRect(labelX - 15, labelY - 8, 30, 16); // Fondo blanco
+    ctx.strokeStyle = '#1f2937';
+    ctx.strokeRect(labelX - 15, labelY - 8, 30, 16); // Borde
+    ctx.fillStyle = '#1f2937';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, labelX, labelY + 3);
+  });
+}
   });
   
   // Dibujar estados (círculos)
@@ -401,28 +413,38 @@ const FiniteStateMachine = () => {
               type="text"
               value={customMachine.states.join(', ')}
               onChange={(e) => {
-  const newStates = e.target.value.split(',').map(s => s.trim()).filter(s => s);
-  setCustomMachine(prev => {
-    // Crear nuevas funciones de transición y salida para los nuevos estados
-    const newTransitionFunction = {};
-    const newOutputFunction = {};
-    
-    newStates.forEach(state => {
-      newTransitionFunction[state] = {};
-      newOutputFunction[state] = {};
-      prev.inputAlphabet.forEach(input => {
-        newTransitionFunction[state][input] = newStates[0] || state;
-        newOutputFunction[state][input] = prev.outputAlphabet[0] || '0';
+  const inputValue = e.target.value;
+  const newStates = inputValue.split(',').map(s => s.trim()).filter(s => s);
+  
+  // Solo actualizar si hay estados válidos para evitar errores
+  if (newStates.length > 0) {
+    setCustomMachine(prev => {
+      const newTransitionFunction = {};
+      const newOutputFunction = {};
+      
+      newStates.forEach(state => {
+        // Mantener valores existentes si el estado ya existía
+        newTransitionFunction[state] = prev.transitionFunction[state] || {};
+        newOutputFunction[state] = prev.outputFunction[state] || {};
+        
+        prev.inputAlphabet.forEach(input => {
+          if (!newTransitionFunction[state][input]) {
+            newTransitionFunction[state][input] = newStates[0];
+          }
+          if (!newOutputFunction[state][input]) {
+            newOutputFunction[state][input] = prev.outputAlphabet[0] || '0';
+          }
+        });
       });
+      
+      return {
+        ...prev,
+        states: newStates,
+        transitionFunction: newTransitionFunction,
+        outputFunction: newOutputFunction
+      };
     });
-    
-    return {
-      ...prev,
-      states: newStates,
-      transitionFunction: newTransitionFunction,
-      outputFunction: newOutputFunction
-    };
-  });
+  }
 }}
               style={styles.input}
               placeholder="s0, s1, s2"
